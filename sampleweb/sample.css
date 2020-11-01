@@ -1,0 +1,38 @@
+* {
+    margin:0; padding:0;
+  }
+  header {
+    height: 40px;
+    width: 100%;
+    padding: 15px 0;
+    background-color: #2e8b57;
+    color: white;
+  }
+  header .headline{
+      line-height: 50px;
+      float: left;
+      font-size: 30px;
+      margin-left: 100px;
+  }
+  .nav-list {
+      line-height: 50px;
+      float: left;
+      margin-left: 30px;
+      list-style: none;
+  }
+  .nav-list-item {
+    list-style: none;
+    display: inline-block;
+    margin: 0 20px;
+  }
+
+h2 {
+    width:180px;
+    font-size: 1.5em;
+    margin: 20px 30px;
+    background: linear-gradient(transparent 70%, #2e8b57 70%);
+   }
+ p.para{
+    margin: 30px 60px;
+}
+ 
