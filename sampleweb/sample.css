@@ -35,4 +35,59 @@ h2 {
  p.para{
     margin: 30px 60px;
 }
+p.para2{
+  position: absolute;
+  left:  750px;                /* 左からの位置指定 */
+  top: 600px;                  /* 上からの位置指定 */
+
+}
  
+.btn-horizontal-border {
+  position: relative;
+  display: inline-block;
+  font-weight: bold;
+  padding: 12px 0 8px;
+  text-decoration: none;
+  color: #146336;
+  transition: .4s;
+}
+
+.btn-horizontal-border:before {
+  position: absolute;
+  content: '';
+  width: 100%;
+  height: 4px;
+  top:100%;
+  left: 0;
+  border-radius: 3px;
+  background:#2e8b57;
+  transition: .2s;
+}
+
+.btn-horizontal-border:after {
+  position: absolute;
+  content: '';
+  width: 100%;
+  height: 4px;
+  top:0;
+  left: 0;
+  border-radius: 3px;
+  background:#2e8b57;
+  transition: .2s;
+}
+
+.btn-horizontal-border:hover:before {
+  top: -webkit-calc(100% - 3px);
+  top: calc(100% - 3px);
+}
+
+.btn-horizontal-border:hover:after {
+  top: 3px;
+}
+#forecast_embed{
+  position:  absolute;        /* 要素の配置方法を指定 */
+  /*padding:  20px;             /* 余白指定 */
+  left:  750px;                /* 左からの位置指定 */
+  top: 225px;                  /* 上からの位置指定 */
+  
+}
