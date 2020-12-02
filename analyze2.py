@@ -2,41 +2,28 @@ import pandas as pd
 import datetime
 from pandas import DataFrame
 
-start_time = datetime.datetime.now()    #計測開始
-
 df = pd.read_csv('201910~202010/20191103.csv')
-print(type(df))
-
-
 
 #######################################################################################################
     ##時刻の形式が 0000/00/00 00:00.00である必要あり。##
 #######################################################################################################
-def drop_random_closed():
+def extract_random_closed():
     global df
     check_list = ['0','1','4','5','8','9','C','D']          #ランダム排除用配列
-    check_list_1 = ['0','1','2','3','4','5','6','7','8']    #時刻排除用
-    check_list_2 = ['7','8','9']                            #時刻排除用その２
-    random_list = []                                        #排除する行を格納
+    check_list_1 = ['0', '1', '2', '3', '4', '5', '6']      #抽出時刻リスト
+    extraction_list = []                                    #抽出する行を格納
     row_count = 0                                           #要素数をカウント
-    for i ,j in zip(df['OUI'],df['TIMESTAMP']): #同時に2つの要素を扱う zip関数はそんな感じ
-        if i[1] in check_list:      #ユニークを抽出
-            if j[11] == '0' and j[12] in check_list_1:      #00:~08:を排除
-                random_list.append(row_count)
-            if j[11] == '2':                                #20:~23:を排除
-                random_list.append(row_count)
-            if j[11] == '1' and j[12] in check_list_2:      #17:~19:を排除
-                random_list.append(row_count)
-        else:       #ランダムは排除
-            random_list.append(row_count)
+    for i ,j in zip(df['OUI'],df['TIMESTAMP']):             #同時に2つの要素を扱う zip関数はそんな感じ
+        if i[1] in check_list:                              #ユニークを抽出
+            if j[11] == '0' and j[12] == '9':               #09を抽出
+                extraction_list.append(row_count)
+            if j[11] == '1' and j[12] in check_list_1:      #10:00~1700を抽出
+                extraction_list.append(row_count)
         row_count += 1
 
-    df = df.drop(random_list)
-
-    #滞在時間long_time分未満のMACアドレスを間引く
+    df = df.query('index in @extraction_list')              #抽出行を取り出す
     df = df.sort_values(['AMAC', 'UNIXTIME']) #まずはソート。めっちゃはやい。
     df = df.reset_index(drop=True)       #インデックス番号を振り直してる　なくてもいいかも
-
 
 
 
@@ -48,9 +35,10 @@ def drop_non_visitor():
     vt = 0             #visit time: 来園時間
     lt = 0             #leave time: 退園時間
     st = 0             #stay time: 滞在時間 
+    ampid_ratio = 0    #同一AMACに対するAMPIDの比率（最大値）
     flag = 0           #観測間隔のフラグ（2時間以上間隔が空いたときにflag = 1)
     count = 0          #同一MACの観測回数
-    index = 0
+    index = 0          #indexのカウント
     for row in df.itertuples():                     #上から1行ずつ見ていく
         if mac != row.AMAC:                         #初めてのMACのとき  
             st = lt - vt                     
@@ -58,7 +46,11 @@ def drop_non_visitor():
                 drop_list.append(mac)
                 flag = 0
             else:
-                df.at[index-1, 'STAY TIME'] = st
+                ampid_ratio = df[index-(count):index+1].AMPID.value_counts(normalize=True).iat[0]
+                if ampid_ratio > 0.6:
+                    drop_list.append(mac)
+                else:
+                    df.at[index-1, 'STAY TIME'] = st
             mac = row.AMAC
             vt = int(row.UNIXTIME)
             lt = int(row.UNIXTIME)
@@ -82,8 +74,13 @@ def drop_by_AMPID():
     visitor_before = 0                #AMPIDで削除を行う前の人数
     visitor_drop_AMPID = 0            #AMPIDで削除を行った後の人数
     mac = ''
+
+    start_time = datetime.datetime.now()           #計測開始
     #↓ AMACごとにグループ化してから、各AMAC毎にAMPID割合を算出、参考サイト( https://note.nkmk.me/python-pandas-dataframe-rename/ ) 
     ret = df.groupby('AMAC')['AMPID'].apply(lambda d: d.value_counts(normalize=True))   
+    end_time = datetime.datetime.now()             #計測終了
+    print("process time : ",end_time-start_time)   #全実効時間の内、7割くらいをこの1行が占めていた
+    
     #print(ret) #確認用
     #↓ 上記のretはマルチインデックスのseries型、扱いづらかったのでdataframe型に変換
     ret = ret.reset_index().rename(columns = {'level_0':'AMAC', 'level_1':'AMPID', 'AMPID':'rate'}) 
@@ -104,10 +101,20 @@ def drop_by_AMPID():
 
 
 
-drop_random_closed()
+start_time_rc = datetime.datetime.now()    #計測開始
+extract_random_closed()
+end_time_rc = datetime.datetime.now()  #計測終了
+
+start_time_nv = datetime.datetime.now()    #計測開始
 drop_non_visitor()
-drop_by_AMPID()
-print(df)
-df.to_csv("20191103_fixed.csv")    #csvファイル出力
-end_time = datetime.datetime.now()  #計測終了
-print("process time is ",end_time-start_time)
+end_time_nv = datetime.datetime.now()  #計測終了
+
+start_time_AMPID = datetime.datetime.now()    #計測開始
+#drop_by_AMPID()                              #この関数も使える気がするので一応残しといた方が良いと思う
+end_time_AMPID = datetime.datetime.now()      #計測終了
+
+#print(df)
+#df.to_csv("20191103_fixed.csv")    #csvファイル出力
+print("process time random_closed: ",end_time_rc-start_time_rc, 
+        "\nprocess time non_visitor:", end_time_nv-start_time_nv,
+        "\nprocess time AMPID:", end_time_AMPID-start_time_AMPID)
