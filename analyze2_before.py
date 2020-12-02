@@ -3,7 +3,7 @@ import datetime
 from pandas import DataFrame
 
 df = pd.read_csv('201910~202010/20191103.csv')
-start_time_whole = datetime.datetime.now()
+start_time = datetime.datetime.now()
 #######################################################################################################
     ##時刻の形式が 0000/00/00 00:00.00である必要あり。##
 #######################################################################################################
@@ -32,11 +32,9 @@ def drop_non_visitor():
     df['STAY TIME'] = ''    #STAY TIME列を追加
     drop_list = []
     mac = ''           #MAC
-    visitor = 0
     vt = 0             #visit time: 来園時間
     lt = 0             #leave time: 退園時間
     st = 0             #stay time: 滞在時間 
-    ampid_ratio = 0    #同一AMACに対するAMPIDの比率（最大値）
     flag = 0           #観測間隔のフラグ（2時間以上間隔が空いたときにflag = 1)
     count = 0          #同一MACの観測回数
     index = 0          #indexのカウント
@@ -47,12 +45,7 @@ def drop_non_visitor():
                 drop_list.append(mac)
                 flag = 0
             else:
-                ampid_ratio = df[index-(count):index+1].AMPID.value_counts(normalize=True).iat[0]
-                if ampid_ratio > 0.6:
-                    drop_list.append(mac)
-                else:
-                    df.at[index-1, 'STAY TIME'] = st
-                    visitor += 1
+                df.at[index-1, 'STAY TIME'] = st
             mac = row.AMAC
             vt = int(row.UNIXTIME)
             lt = int(row.UNIXTIME)
@@ -67,7 +60,6 @@ def drop_non_visitor():
     #df = df[~df['AMAC'].isin(drop_list)]        #listのMACを削除
     df = df.query('AMAC not in @drop_list')      #query使ってMAC削除(こっちのが早いらしい)
     df = df.reset_index(drop=True)       #インデックス番号を振り直してる　なくてもいいかも
-    print('Amount of vistor:', visitor)
 
 
 
@@ -78,12 +70,8 @@ def drop_by_AMPID():
     visitor_drop_AMPID = 0            #AMPIDで削除を行った後の人数
     mac = ''
 
-    start_time = datetime.datetime.now()           #計測開始
     #↓ AMACごとにグループ化してから、各AMAC毎にAMPID割合を算出、参考サイト( https://note.nkmk.me/python-pandas-dataframe-rename/ ) 
     ret = df.groupby('AMAC')['AMPID'].apply(lambda d: d.value_counts(normalize=True))   
-    end_time = datetime.datetime.now()             #計測終了
-    print("process time : ",end_time-start_time)   #全実効時間の内、7割くらいをこの1行が占めていた
-    
     #print(ret) #確認用
     #↓ 上記のretはマルチインデックスのseries型、扱いづらかったのでdataframe型に変換
     ret = ret.reset_index().rename(columns = {'level_0':'AMAC', 'level_1':'AMPID', 'AMPID':'rate'}) 
@@ -113,15 +101,10 @@ drop_non_visitor()
 #end_time_nv = datetime.datetime.now()  #計測終了
 
 #start_time_AMPID = datetime.datetime.now()    #計測開始
-#drop_by_AMPID()                              #この関数も使える気がするので一応残しといた方が良いと思う
+drop_by_AMPID()                              #この関数も使える気がするので一応残しといた方が良いと思う
 #end_time_AMPID = datetime.datetime.now()      #計測終了
 
 #print(df)
-end_time_whole = datetime.datetime.now()
 #df.to_csv("20191103_fixed.csv")    #csvファイル出力
-print('process time:', end_time_whole-start_time_whole)
-'''
-print("process time random_closed: ",end_time_rc-start_time_rc, 
-        "\nprocess time non_visitor:", end_time_nv-start_time_nv,
-        "\nprocess time AMPID:", end_time_AMPID-start_time_AMPID)
-'''
+end_time = datetime.datetime.now()
+print("process time: ",end_time-start_time)

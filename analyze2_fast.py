@@ -30,13 +30,13 @@ def extract_random_closed():
 def drop_non_visitor():
     global df
     df['STAY TIME'] = ''    #STAY TIME列を追加
-    drop_list = []
-    mac = ''           #MAC
-    visitor = 0
+    drop_list = []          #削除AMACのlist
+    dict_AMPID = {}         #AMPIDのカウント回数を記録する辞書
+    mac = ''                #MAC
+    visitor = 0             #来園者数
     vt = 0             #visit time: 来園時間
     lt = 0             #leave time: 退園時間
     st = 0             #stay time: 滞在時間 
-    ampid_ratio = 0    #同一AMACに対するAMPIDの比率（最大値）
     flag = 0           #観測間隔のフラグ（2時間以上間隔が空いたときにflag = 1)
     count = 0          #同一MACの観測回数
     index = 0          #indexのカウント
@@ -45,62 +45,41 @@ def drop_non_visitor():
             st = lt - vt                     
             if st < 30*60 or count < 7 or flag == 1:             #滞在時間が30分未満か観測回数が7回未満で削除
                 drop_list.append(mac)
-                flag = 0
+                flag = 0                                         #flagをリセット
+            elif max(dict_AMPID.values()) / count > 0.6:         #AMPID観測数の最大値の割合が6割を超えたとき
+                drop_list.append(mac)                            #削除
             else:
-                ampid_ratio = df[index-(count):index+1].AMPID.value_counts(normalize=True).iat[0]
-                if ampid_ratio > 0.6:
-                    drop_list.append(mac)
-                else:
-                    df.at[index-1, 'STAY TIME'] = st
-                    visitor += 1
+                visitor += 1                                     #visitorカウント
+                df.at[index-1, 'STAY TIME'] = st                 #滞在時間を追加
+            #以下、変数の初期化・更新
             mac = row.AMAC
+            dict_AMPID = {}
+            dict_AMPID[row.AMPID] = 1
             vt = int(row.UNIXTIME)
             lt = int(row.UNIXTIME)
             count = 1
         elif mac == row.AMAC and flag == 0:
             if int(row.UNIXTIME) - lt > 2*60*60:    #観測間隔が2時間以上空くと削除
                 flag = 1
-            lt = int(row.UNIXTIME)
-            count += 1
+            else:
+                AMPID_process(dict_AMPID, row)      #AMPIDをカウントする関数
+                lt = int(row.UNIXTIME)
+                count += 1
         index += 1
 
-    #df = df[~df['AMAC'].isin(drop_list)]        #listのMACを削除
-    df = df.query('AMAC not in @drop_list')      #query使ってMAC削除(こっちのが早いらしい)
-    df = df.reset_index(drop=True)       #インデックス番号を振り直してる　なくてもいいかも
-    print('Amount of vistor:', visitor)
+    #df = df[~df['AMAC'].isin(drop_list)]           #listのMACを削除
+    df = df.query('AMAC not in @drop_list')         #query使ってMAC削除(こっちのが早いらしい)
+    df = df.reset_index(drop=True)                  #インデックス番号を振り直してる　なくてもいいかも
+    print('Number of visitor:', visitor)
+    df.at[0, 'Number of visitor'] = visitor         #visitorの列を追加
 
 
 
-def drop_by_AMPID():
-    global df
-    drop_list = []
-    visitor_before = 0                #AMPIDで削除を行う前の人数
-    visitor_drop_AMPID = 0            #AMPIDで削除を行った後の人数
-    mac = ''
-
-    start_time = datetime.datetime.now()           #計測開始
-    #↓ AMACごとにグループ化してから、各AMAC毎にAMPID割合を算出、参考サイト( https://note.nkmk.me/python-pandas-dataframe-rename/ ) 
-    ret = df.groupby('AMAC')['AMPID'].apply(lambda d: d.value_counts(normalize=True))   
-    end_time = datetime.datetime.now()             #計測終了
-    print("process time : ",end_time-start_time)   #全実効時間の内、7割くらいをこの1行が占めていた
-    
-    #print(ret) #確認用
-    #↓ 上記のretはマルチインデックスのseries型、扱いづらかったのでdataframe型に変換
-    ret = ret.reset_index().rename(columns = {'level_0':'AMAC', 'level_1':'AMPID', 'AMPID':'rate'}) 
-
-    for row in ret.itertuples():    #1行ずつうえから見ていく
-        if mac != row.AMAC:         #初めてのAMACに出会ったとき
-            visitor_before += 1
-            mac = row.AMAC
-            if row.rate > 0.6:      #各AMACはAMPIDの割合が高い順に並んでいるので、出会ったタイミングでrateを確認
-                drop_list.append(mac)
-            else: visitor_drop_AMPID +=1    #dropされなかったものが最終的な人数
-
-    print('Number of visitor_before : ' , visitor_before)
-    print('Number of visitor_drop_AMPID : ' , visitor_drop_AMPID)
-    df = df.query('AMAC not in @drop_list')      #query使ってMAC削除(こっちのが早いらしい)
-    df = df.reset_index(drop=True)       #インデックス番号を振り直してる　なくてもいいかも
-    df.at[0, 'Number of visitor'] = visitor_drop_AMPID  #visitorの列を追加
+def AMPID_process(dict_AMPID, row):             #AMAC毎にAMPIDをカウントする関数
+    if row.AMPID not in dict_AMPID:             #初めてのAMPIDに出会ったとき
+        dict_AMPID[row.AMPID] = 1               #辞書に追加
+    else:                                       #すでに登録されているAMPIDについて
+        dict_AMPID[row.AMPID] +=1               #カウントを増やす
 
 
 
@@ -115,13 +94,12 @@ drop_non_visitor()
 #start_time_AMPID = datetime.datetime.now()    #計測開始
 #drop_by_AMPID()                              #この関数も使える気がするので一応残しといた方が良いと思う
 #end_time_AMPID = datetime.datetime.now()      #計測終了
-
-#print(df)
-end_time_whole = datetime.datetime.now()
-#df.to_csv("20191103_fixed.csv")    #csvファイル出力
-print('process time:', end_time_whole-start_time_whole)
 '''
 print("process time random_closed: ",end_time_rc-start_time_rc, 
         "\nprocess time non_visitor:", end_time_nv-start_time_nv,
         "\nprocess time AMPID:", end_time_AMPID-start_time_AMPID)
 '''
+
+end_time_whole = datetime.datetime.now()
+#df.to_csv("20191103_fixed.csv")    #csvファイル出力
+print('process time:', end_time_whole-start_time_whole)
